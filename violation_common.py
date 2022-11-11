@@ -42,7 +42,7 @@ def process_raw_violation_data(violation_data):
     return violation_data
 
 
-def scale_and_encode(violation_data, to_scale=None, to_encode=None, target='PROPOSED_PENALTY'):
+def scale_and_encode(violation_data, to_scale=None, to_encode=None, target='PROPOSED_PENALTY', target_method=StandardScaler):
     if to_scale is None:
         to_scale = ['VIOLATOR_VIOLATION_CNT', 'NO_AFFECTED', 'VIOLATOR_INSPECTION_DAY_CNT']
     
@@ -59,7 +59,9 @@ def scale_and_encode(violation_data, to_scale=None, to_encode=None, target='PROP
     scaler = StandardScaler()
     ohe = OneHotEncoder(sparse=False)
 
-    target_scaler = StandardScaler()
+    target_scaler = target_method()
+        
+    
 
     # Scale and Encode Separate Columns
     scaled_columns  = scaler.fit_transform(X[to_scale])
