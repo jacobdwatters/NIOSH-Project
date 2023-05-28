@@ -8,6 +8,10 @@ def retreive_raw_violation_data():
     FEATURES = ['VIOLATION_OCCUR_DT', 'MINE_ID', 'MINE_TYPE', 'COAL_METAL_IND', 'SIG_SUB', 'LIKELIHOOD', 
                 'INJ_ILLNESS', 'NO_AFFECTED', 'NEGLIGENCE', 'VIOLATOR_VIOLATION_CNT',
                 'VIOLATOR_INSPECTION_DAY_CNT']
+    # CONTROLLER_ID, VIOLATOR_ID, MINE_ID, and CONTRACTOR_ID are also possibly but have many categories
+    FEATURES = ['VIOLATOR_TYPE_CD', 'MINE_ID', 'MINE_TYPE', 'COAL_METAL_IND',
+                'VIOLATION_OCCUR_DT', 'SIG_SUB', 'PRIMARY_OR_MILL', 'VIOLATOR_VIOLATION_CNT',
+                'VIOLATOR_INSPECTION_DAY_CNT']
     TARGETS = ['PROPOSED_PENALTY']
 
     violation_data = pd.read_csv("https://arlweb.msha.gov/OpenGovernmentData/DataSets/Violations.zip", 
@@ -19,21 +23,22 @@ def retreive_raw_violation_data():
 def process_raw_violation_data(violation_data):
     violation_data['MINE_TYPE'].fillna('Facility', inplace=True)
     violation_data['COAL_METAL_IND'].fillna('M', inplace=True)
-    violation_data['SIG_SUB'].fillna('N', inplace=True)
-    violation_data['LIKELIHOOD'].fillna('NoLikelihood', inplace=True)
-    violation_data['INJ_ILLNESS'].fillna('NoLostDays', inplace=True)
-    violation_data['NO_AFFECTED'].fillna(0, inplace=True)
-    violation_data['NEGLIGENCE'].fillna('NoNegligence', inplace=True)
+    violation_data['PRIMARY_OR_MILL'].fillna('Not_Applicable', inplace=True)
+    #violation_data['SIG_SUB'].fillna('N', inplace=True)
+    #violation_data['LIKELIHOOD'].fillna('NoLikelihood', inplace=True)
+    #violation_data['INJ_ILLNESS'].fillna('NoLostDays', inplace=True)
+    #violation_data['NO_AFFECTED'].fillna(0, inplace=True)
+    #violation_data['NEGLIGENCE'].fillna('NoNegligence', inplace=True)
     violation_data['VIOLATOR_VIOLATION_CNT'].fillna(0, inplace=True)
     violation_data['VIOLATOR_INSPECTION_DAY_CNT'].fillna(0, inplace=True)
-    violation_data['PROPOSED_PENALTY'].fillna(violation_data['PROPOSED_PENALTY'].mean(), inplace=True)
+    #violation_data['PROPOSED_PENALTY'].fillna(violation_data['PROPOSED_PENALTY'].mean(), inplace=True)
 
     violation_data['VIOLATION_OCCUR_DT'] = pd.to_datetime(violation_data['VIOLATION_OCCUR_DT'], format='%m/%d/%Y', exact=False)
     violation_data.reset_index(inplace=True)
 
     violation_data['YEAR_OCCUR'] = violation_data['VIOLATION_OCCUR_DT'].dt.year
 
-    violation_data['YEAR_OCCUR'].fillna('1999', inplace=True)
+    #violation_data['YEAR_OCCUR'].fillna('1999', inplace=True)
     violation_data = violation_data._convert(numeric=True)
 
     violation_data = violation_data.drop(columns=['VIOLATION_OCCUR_DT'])
@@ -45,9 +50,11 @@ def process_raw_violation_data(violation_data):
 def scale_and_encode(violation_data, to_scale=None, to_encode=None, target='PROPOSED_PENALTY', target_method=StandardScaler):
     if to_scale is None:
         to_scale = ['VIOLATOR_VIOLATION_CNT', 'NO_AFFECTED', 'VIOLATOR_INSPECTION_DAY_CNT']
+        to_scale = ['VIOLATOR_INSPECTION_DAY_CNT', 'VIOLATOR_VIOLATION_CNT', 'YEAR_OCCUR']
     
     if to_encode is None:
-        to_encode = ['MINE_TYPE', 'COAL_METAL_IND', 'LIKELIHOOD', 'INJ_ILLNESS', 'SIG_SUB', 'NEGLIGENCE']
+        to_encode = ['MINE_TYPE', 'COAL_METAL_IND', 'INJ_ILLNESS', 'SIG_SUB']
+        to_encode = ['PRIMARY_OR_MILL', 'COAL_METAL_IND', 'MINE_TYPE', 'SIG_SUB', 'VIOLATOR_TYPE_CD']
     
     FEATURES = [col for col in violation_data.columns if col != target]
     TARGETS = [target]
