@@ -2,6 +2,10 @@ from sklearn.preprocessing import StandardScaler, OneHotEncoder
 import pandas as pd
 import numpy as np
 from pathlib import Path
+from sklearn.preprocessing import StandardScaler, OneHotEncoder, LabelEncoder
+from sklearn.pipeline import Pipeline
+from sklearn.compose import ColumnTransformer
+
 
 def retreive_raw_violation_data():
 
@@ -9,7 +13,7 @@ def retreive_raw_violation_data():
                 'INJ_ILLNESS', 'NO_AFFECTED', 'NEGLIGENCE', 'VIOLATOR_VIOLATION_CNT',
                 'VIOLATOR_INSPECTION_DAY_CNT']
     # CONTROLLER_ID, VIOLATOR_ID, MINE_ID, and CONTRACTOR_ID are also possibly but have many categories
-    FEATURES = ['VIOLATOR_TYPE_CD', 'MINE_ID', 'MINE_TYPE', 'COAL_METAL_IND',
+    FEATURES = ['VIOLATOR_TYPE_CD', 'MINE_TYPE', 'COAL_METAL_IND',
                 'VIOLATION_OCCUR_DT', 'SIG_SUB', 'PRIMARY_OR_MILL', 'VIOLATOR_VIOLATION_CNT',
                 'VIOLATOR_INSPECTION_DAY_CNT']
     TARGETS = ['PROPOSED_PENALTY']
@@ -39,7 +43,7 @@ def process_raw_violation_data(violation_data):
     violation_data['YEAR_OCCUR'] = violation_data['VIOLATION_OCCUR_DT'].dt.year
 
     #violation_data['YEAR_OCCUR'].fillna('1999', inplace=True)
-    violation_data = violation_data._convert(numeric=True)
+    #violation_data = violation_data.convert(numeric=True)
 
     violation_data = violation_data.drop(columns=['VIOLATION_OCCUR_DT'])
     violation_data = violation_data.drop(columns=['index'])
@@ -49,11 +53,9 @@ def process_raw_violation_data(violation_data):
 
 def scale_and_encode(violation_data, to_scale=None, to_encode=None, target='PROPOSED_PENALTY', target_method=StandardScaler):
     if to_scale is None:
-        to_scale = ['VIOLATOR_VIOLATION_CNT', 'NO_AFFECTED', 'VIOLATOR_INSPECTION_DAY_CNT']
         to_scale = ['VIOLATOR_INSPECTION_DAY_CNT', 'VIOLATOR_VIOLATION_CNT', 'YEAR_OCCUR']
     
     if to_encode is None:
-        to_encode = ['MINE_TYPE', 'COAL_METAL_IND', 'INJ_ILLNESS', 'SIG_SUB']
         to_encode = ['PRIMARY_OR_MILL', 'COAL_METAL_IND', 'MINE_TYPE', 'SIG_SUB', 'VIOLATOR_TYPE_CD']
     
     FEATURES = [col for col in violation_data.columns if col != target]
@@ -103,3 +105,79 @@ if __name__ == '__main__':
     (X, y), (scaler, ohe, target_scaler) = scale_and_encode(data)
     print(ohe)
     print(data.shape)
+
+
+def encode_and_scale(data, target, to_keep=None, categorical_cols=None, numerical_cols=None, contionous_target=None, preprocessor=None, target_transformer=None):
+    """
+    Encode categorical features and scale numerical features in the input data, and transform the target variable.
+
+    Parameters
+    ----------
+    data : pandas.DataFrame
+        Input data to be encoded and scaled.
+    target : str
+        Name of the target variable in the input data.
+    to_keep : list of str, optional
+        List of column names to keep in the encoded and scaled data. Ignored if preprocessor is provided.
+    categorical_cols : list of str, optional
+        List of column names that contain categorical features. Ignored if preprocessor is provided.
+    numerical_cols : list of str, optional
+        List of column names that contain numerical features. Ignored if preprocessor is provided.
+    contionous_target : bool, optional
+        Whether the target variable is continuous or not. Ignored if target_transformer is provided.
+    preprocessor : sklearn.compose.ColumnTransformer, optional
+        Preprocessing pipeline to apply to the input data. If not provided, a default pipeline will be used.
+    target_transformer : sklearn.base.TransformerMixin, optional
+        Transformer to apply to the target variable. If not provided, a default transformer will be used.
+
+    Returns
+    -------
+    X : numpy.ndarray
+        Encoded and scaled feature matrix.
+    y : numpy.ndarray
+        Transformed target variable.
+    preprocessor : sklearn.compose.ColumnTransformer
+        Preprocessing pipeline used to encode and scale the input data.
+    target_transformer : sklearn.base.TransformerMixin
+        Transformer used to transform the target variable.
+
+    """
+
+    assert contionous_target is not None or target_transformer is not None, 'Either contionous_target or target_transformer must be provided.'
+    assert (to_keep is not None and categorical_cols is not None and numerical_cols is not None) or preprocessor is not None, 'Either to_keep, categorical_cols, and numerical_cols must be provided, or preprocessor must be provided.'
+
+    if preprocessor is None:
+
+        numerical_cols_to_keep = list(set(numerical_cols).intersection(to_keep))
+        categorical_cols_to_keep = list(set(categorical_cols).intersection(to_keep))
+
+        # Define preprocessing pipelines
+        numeric_transformer = Pipeline(steps=[
+            ('scaler', StandardScaler())])
+
+        categorical_transformer = Pipeline(steps=[
+            ('onehot', OneHotEncoder(handle_unknown='ignore'))])
+
+        preprocessor = ColumnTransformer(
+            transformers=[
+                ('num', numeric_transformer, numerical_cols_to_keep),
+                ('cat', categorical_transformer, categorical_cols_to_keep)])
+
+    # Apply transformations
+    X = preprocessor.fit_transform(data)
+
+    # Convert target to 1D array
+    y = data[target]
+    y = y.values.ravel()
+
+    # Define the transformer for target
+    if target_transformer is None:
+        if contionous_target:
+            target_transformer = StandardScaler()
+        else:
+            target_transformer = LabelEncoder()
+
+    # Transform the targets
+    y = target_transformer.fit_transform(y)
+
+    return X, y, preprocessor, target_transformer
