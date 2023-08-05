@@ -160,11 +160,13 @@ def encode_and_scale(data, target, to_keep=None, categorical_cols=None, numerica
 
         preprocessor = ColumnTransformer(
             transformers=[
-                ('num', numeric_transformer, numerical_cols_to_keep),
+                ('num', 'passthrough', numerical_cols_to_keep),
                 ('cat', categorical_transformer, categorical_cols_to_keep)])
+        
+        preprocessor.fit(data)
 
     # Apply transformations
-    X = preprocessor.fit_transform(data)
+    X = preprocessor.transform(data)
 
     # Convert target to 1D array
     y = data[target]
@@ -174,10 +176,46 @@ def encode_and_scale(data, target, to_keep=None, categorical_cols=None, numerica
     if target_transformer is None:
         if contionous_target:
             target_transformer = StandardScaler()
+            target_transformer.fit(y[:, None])
         else:
             target_transformer = LabelEncoder()
-
-    # Transform the targets
-    y = target_transformer.fit_transform(y)
+            target_transformer.fit(y)
+    
+    if isinstance(target_transformer, StandardScaler):
+        pass
+    else:
+        y = target_transformer.transform(y)
 
     return X, y, preprocessor, target_transformer
+
+
+def scale_selected_columns(df, cols_to_scale, preprocessor=None):
+    """
+    Scales selected numerical columns in a pandas DataFrame and returns the scaler.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        The input DataFrame.
+    cols_to_scale : list of str
+        List of column names to be scaled.
+
+    Returns
+    -------
+    df_scaled : pandas.DataFrame
+        Output DataFrame with the specified columns scaled.
+    preprocessor : sklearn.compose.ColumnTransformer
+        The ColumnTransformer object used for scaling.
+    """
+    cols_not_to_scale = [col for col in df.columns if col not in cols_to_scale]
+
+    preprocessor = ColumnTransformer(
+        transformers=[
+            ('num', StandardScaler(), cols_to_scale),
+            ('pass', 'passthrough', cols_not_to_scale)
+        ]
+    ) if preprocessor is None else preprocessor
+    
+    df_scaled = pd.DataFrame(preprocessor.fit_transform(df), columns=cols_to_scale + cols_not_to_scale)
+
+    return df_scaled, preprocessor
