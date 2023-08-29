@@ -189,6 +189,39 @@ def encode_and_scale(data, target, to_keep=None, categorical_cols=None, numerica
     return X, y, preprocessor, target_transformer
 
 
+def encode_selected_columns(df, cols_to_encode, preprocessor=None):
+    """
+    OHE selected columns and returns np array.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        The input DataFrame.
+    cols_to_encode : list of str
+        List of column names to be encoded.
+
+    Returns
+    -------
+    array_encoded : numpy.ndarray
+        Output array with the specified columns encoded and others dropped.
+    preprocessor : sklearn.compose.ColumnTransformer
+        The ColumnTransformer object used for encoding.
+    """
+    cols_not_to_encode = [col for col in df.columns if col not in cols_to_encode]
+
+    if preprocessor is None:
+        preprocessor = ColumnTransformer(
+            transformers=[
+                ('cat', OneHotEncoder(), cols_to_encode),
+                ('drop', 'drop', cols_not_to_encode)
+            ]
+        )
+        preprocessor.fit(df)
+        
+    result = preprocessor.transform(df)
+
+    return result, preprocessor
+
 def scale_selected_columns(df, cols_to_scale, preprocessor=None):
     """
     Scales selected numerical columns in a pandas DataFrame and returns the scaler.
@@ -202,20 +235,90 @@ def scale_selected_columns(df, cols_to_scale, preprocessor=None):
 
     Returns
     -------
-    df_scaled : pandas.DataFrame
-        Output DataFrame with the specified columns scaled.
+    cols_scaled : numpy.ndarray
+        Output Array with the specified columns scaled and others dropped.
     preprocessor : sklearn.compose.ColumnTransformer
         The ColumnTransformer object used for scaling.
     """
     cols_not_to_scale = [col for col in df.columns if col not in cols_to_scale]
 
-    preprocessor = ColumnTransformer(
-        transformers=[
-            ('num', StandardScaler(), cols_to_scale),
-            ('pass', 'passthrough', cols_not_to_scale)
-        ]
-    ) if preprocessor is None else preprocessor
-    
-    df_scaled = pd.DataFrame(preprocessor.fit_transform(df), columns=cols_to_scale + cols_not_to_scale)
+    if preprocessor is None:
+        preprocessor = ColumnTransformer(
+            transformers=[
+                ('num', StandardScaler(), cols_to_scale),
+                ('drop', 'drop', cols_not_to_scale)
+            ]
+        )
+        preprocessor.fit(df)
+        
+    cols_scaled = preprocessor.transform(df)
 
-    return df_scaled, preprocessor
+    return cols_scaled, preprocessor
+
+def df_to_model_ready(df, categorical_cols, numerical_cols, target_col, preprocessor=None):
+    """
+    Preprocesses a pandas DataFrame to be ready for machine learning modeling.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        The input DataFrame.
+    categorical_cols : list of str
+        List of column names to be one-hot encoded.
+    numerical_cols : list of str
+        List of column names to be scaled.
+    target_col : str
+        The name of the target column.
+    preprocessor : dict, optional
+        A dictionary containing preprocessor objects for target, numerical and categorical columns.
+
+    Returns
+    -------
+    X : numpy.ndarray
+        The processed feature array.
+    y : numpy.ndarray
+        The processed target array.
+    preprocessor : dict
+        A dictionary containing preprocessor objects for target, numerical and categorical columns.
+    """
+    categorical_target = target_col in categorical_cols
+    numerical_cols = [col for col in numerical_cols if col != target_col]
+    categorical_cols = [col for col in categorical_cols if col != target_col]
+    
+    target = df[[target_col]].to_numpy().ravel()
+    features = df.drop(target_col, axis=1)
+    
+    target_preprocessor = None
+    numerical_preprocessor = None
+    categorical_preprocessor = None
+    
+    if preprocessor is None:
+        preprocessor = dict()
+        if categorical_target:
+            target_preprocessor = LabelEncoder()
+            target_preprocessor.fit(target)
+        else:
+            target_preprocessor = StandardScaler()
+            target_preprocessor.fit(target[:, np.newaxis])
+        
+        preprocessor['target'] = target_preprocessor
+
+        _, numerical_preprocessor = scale_selected_columns(features, cols_to_scale=numerical_cols)
+        _, categorical_preprocessor = encode_selected_columns(features, cols_to_encode=categorical_cols)
+
+        preprocessor['numerical'] = numerical_preprocessor
+        preprocessor['categorical'] = categorical_preprocessor
+
+    processed_target = None
+    if categorical_target:
+        processed_target = preprocessor['target'].transform(target)
+    else:
+        processed_target = preprocessor['target'].transform(target[:, np.newaxis])[:, 0]
+    
+    scaled_features = preprocessor['numerical'].transform(features)
+
+    encoded_cat_features = preprocessor['categorical'].transform(features)
+
+    full_features = np.concatenate([scaled_features, encoded_cat_features], axis=1)
+
+    return full_features, processed_target, preprocessor
