@@ -46,7 +46,7 @@ def lgb_objective(trial, data_train, data_validate, metrics, objective_metric, j
         "objective": "binary",
         "metric": "binary_logloss",
         "boosting_type": "gbdt",
-        "verbosity": -1,
+        "verbosity": -2,
         "lambda_l1": trial.suggest_float("lambda_l1", 1e-8, 10.0, log=True),
         "lambda_l2": trial.suggest_float("lambda_l2", 1e-8, 10.0, log=True),
         "num_leaves": trial.suggest_int("num_leaves", 2, 256),
@@ -57,9 +57,13 @@ def lgb_objective(trial, data_train, data_validate, metrics, objective_metric, j
     }
 
     num_features = trial.suggest_int('num_features', 1, len(categorical_cols) + len(numerical_cols))
+    cols_to_keep = feature_ranking[:num_features]
+    categorical_cols_to_keep = list(set(cols_to_keep) & set(categorical_cols))
+    categorical_cols_to_keep.append(target)
+    numerical_cols_to_keep = list(set(cols_to_keep) & set(numerical_cols))
 
-    X_train, y_train, preprocessor, target_transformer = violation_common.encode_and_scale(data_train, target=target, contionous_target=False, to_keep=feature_ranking[0:num_features], categorical_cols=categorical_cols, numerical_cols=numerical_cols, preprocessor=None, target_transformer=None)
-    X_validate, y_validate, _, _ = violation_common.encode_and_scale(data_validate, target=target, to_keep=feature_ranking[0:num_features], preprocessor=preprocessor, target_transformer=target_transformer)
+    X_train, y_train, preprocessor = violation_common.df_to_model_ready(data_train, categorical_cols_to_keep, numerical_cols_to_keep, target)
+    X_validate, y_validate, _ = violation_common.df_to_model_ready(data_validate, categorical_cols_to_keep, numerical_cols_to_keep, target, preprocessor=preprocessor)
 
     model = lgb.LGBMClassifier(**param)
 
@@ -92,9 +96,13 @@ def rf_objective(trial, data_train, data_validate, metrics, objective_metric):
         "split_rule": trial.suggest_categorical("split_rule", ["gini", "extratrees"]),
         "sample_fraction": trial.suggest_float("sample_fraction", 0.5, 1.0),
     }
+    cols_to_keep = feature_ranking[:num_features]
+    categorical_cols_to_keep = list(set(cols_to_keep) & set(categorical_cols))
+    categorical_cols_to_keep.append(target)
+    numerical_cols_to_keep = list(set(cols_to_keep) & set(numerical_cols))
 
-    X_train, y_train, preprocessor, target_transformer = violation_common.encode_and_scale(data_train, target=target, contionous_target=False, to_keep=feature_ranking[0:num_features], categorical_cols=categorical_cols, numerical_cols=numerical_cols, preprocessor=None, target_transformer=None)
-    X_validate, y_validate, _, _ = violation_common.encode_and_scale(data_validate, target=target, to_keep=feature_ranking[0:num_features], preprocessor=preprocessor, target_transformer=target_transformer)
+    X_train, y_train, preprocessor = violation_common.df_to_model_ready(data_train, categorical_cols_to_keep, numerical_cols_to_keep, target)
+    X_validate, y_validate, _ = violation_common.df_to_model_ready(data_validate, categorical_cols_to_keep, numerical_cols_to_keep, target, preprocessor=preprocessor)
 
     model = RangerForestClassifier(**param)
 
@@ -123,8 +131,13 @@ def logistic_objective(trial, data_train, data_validate, metrics, objective_metr
         "max_iter": trial.suggest_int("max_iter", 100, 1000),
     }
 
-    X_train, y_train, preprocessor, target_transformer = violation_common.encode_and_scale(data_train, target=target, contionous_target=False, to_keep=feature_ranking[0:num_features], categorical_cols=categorical_cols, numerical_cols=numerical_cols, preprocessor=None, target_transformer=None)
-    X_validate, y_validate, _, _ = violation_common.encode_and_scale(data_validate, target=target, to_keep=feature_ranking[0:num_features], preprocessor=preprocessor, target_transformer=target_transformer)
+    cols_to_keep = feature_ranking[:num_features]
+    categorical_cols_to_keep = list(set(cols_to_keep) & set(categorical_cols))
+    categorical_cols_to_keep.append(target)
+    numerical_cols_to_keep = list(set(cols_to_keep) & set(numerical_cols))
+
+    X_train, y_train, preprocessor = violation_common.df_to_model_ready(data_train, categorical_cols_to_keep, numerical_cols_to_keep, target)
+    X_validate, y_validate, _ = violation_common.df_to_model_ready(data_validate, categorical_cols_to_keep, numerical_cols_to_keep, target, preprocessor=preprocessor)
 
     model = LogisticRegression(**param)
 
@@ -162,8 +175,14 @@ def nn_objective(trial, data_train, data_validate, metrics, objective_metric):
     # Define neural network architecture
     num_features = trial.suggest_int('num_features', 1, len(categorical_cols) + len(numerical_cols))
 
-    X_train, y_train, preprocessor, target_transformer = violation_common.encode_and_scale(data_train, target=target, contionous_target=False, to_keep=feature_ranking[0:num_features], categorical_cols=categorical_cols, numerical_cols=numerical_cols, preprocessor=None, target_transformer=None)
-    X_validate, y_validate, _, _ = violation_common.encode_and_scale(data_validate, target=target, to_keep=feature_ranking[0:num_features], preprocessor=preprocessor, target_transformer=target_transformer)
+    num_features = trial.suggest_int('num_features', 1, len(categorical_cols) + len(numerical_cols))
+    cols_to_keep = feature_ranking[:num_features]
+    categorical_cols_to_keep = list(set(cols_to_keep) & set(categorical_cols))
+    categorical_cols_to_keep.append(target)
+    numerical_cols_to_keep = list(set(cols_to_keep) & set(numerical_cols))
+
+    X_train, y_train, preprocessor = violation_common.df_to_model_ready(data_train, categorical_cols_to_keep, numerical_cols_to_keep, target)
+    X_validate, y_validate, _ = violation_common.df_to_model_ready(data_validate, categorical_cols_to_keep, numerical_cols_to_keep, target, preprocessor=preprocessor)
 
     input_size = X_train.shape[1]
     dropout_rate = trial.suggest_float('dropout_rate', 0.1, 0.5)
@@ -347,6 +366,10 @@ if __name__ == '__main__':
         for dataset_type in dataset_types:
             for model_name, objective, _ in model_types:
                 print(f'SMOTE: {dataset_type}, Model: {model_name}')
+                # print("Best hyperparameters:")
+                # pprint(hp_validation_results[dataset_type][model_name].best_params)
+                # print("Metrics:")
+                # pprint(hp_validation_results[dataset_type][model_name].best_trial.user_attrs)
                 print('Confusion Matrix:')
                 pprint(hp_validation_results[dataset_type][model_name].best_trial.user_attrs['confusion_matrix'])
                 print()

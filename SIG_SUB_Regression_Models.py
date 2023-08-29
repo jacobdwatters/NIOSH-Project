@@ -39,8 +39,16 @@ def lgb_regression_objective(trial, data_train, data_validate, metrics, objectiv
     }
 
     # same pre-processing and encoding steps as before
-    X_train, y_train, preprocessor, target_transformer = violation_common.encode_and_scale(data_train, target=target, contionous_target=True, to_keep=feature_ranking[0:num_features], categorical_cols=categorical_cols, numerical_cols=numerical_cols, preprocessor=None, target_transformer=None)
-    X_validate, y_validate, _, _ = violation_common.encode_and_scale(data_validate, target=target, to_keep=feature_ranking[0:num_features], preprocessor=preprocessor, target_transformer=target_transformer)
+    # X_train, y_train, preprocessor, target_transformer = violation_common.encode_and_scale(data_train, target=target, contionous_target=True, to_keep=feature_ranking[0:num_features], categorical_cols=categorical_cols, numerical_cols=numerical_cols, preprocessor=None, target_transformer=None)
+    # X_validate, y_validate, _, _ = violation_common.encode_and_scale(data_validate, target=target, to_keep=feature_ranking[0:num_features], preprocessor=preprocessor, target_transformer=target_transformer)
+
+    cols_to_keep = feature_ranking[:num_features]
+    categorical_cols_to_keep = list(set(cols_to_keep) & set(categorical_cols))
+    numerical_cols_to_keep = list(set(cols_to_keep) & set(numerical_cols))
+    numerical_cols_to_keep.append(target)
+
+    X_train, y_train, preprocessor = violation_common.df_to_model_ready(data_train, categorical_cols_to_keep, numerical_cols_to_keep, target)
+    X_validate, y_validate, _ = violation_common.df_to_model_ready(data_validate, categorical_cols_to_keep, numerical_cols_to_keep, target, preprocessor=preprocessor)
 
     model = LGBMRegressor(**param)
 
@@ -48,7 +56,7 @@ def lgb_regression_objective(trial, data_train, data_validate, metrics, objectiv
     preds = model.predict(X_validate)
 
     if just_predict:
-        return preds
+        return preds, preprocessor
 
     # calculate metrics
     for metric_name, metric_func in metrics:
@@ -69,8 +77,13 @@ def rf_regression_objective(trial, data_train, data_validate, metrics, objective
     }
 
     # same pre-processing and encoding steps as before
-    X_train, y_train, preprocessor, target_transformer = violation_common.encode_and_scale(data_train, target=target, contionous_target=True, to_keep=feature_ranking[0:num_features], categorical_cols=categorical_cols, numerical_cols=numerical_cols, preprocessor=None, target_transformer=None)
-    X_validate, y_validate, _, _ = violation_common.encode_and_scale(data_validate, target=target, to_keep=feature_ranking[0:num_features], preprocessor=preprocessor, target_transformer=target_transformer)
+    cols_to_keep = feature_ranking[:num_features]
+    categorical_cols_to_keep = list(set(cols_to_keep) & set(categorical_cols))
+    numerical_cols_to_keep = list(set(cols_to_keep) & set(numerical_cols))
+    numerical_cols_to_keep.append(target)
+
+    X_train, y_train, preprocessor = violation_common.df_to_model_ready(data_train, categorical_cols_to_keep, numerical_cols_to_keep, target)
+    X_validate, y_validate, _ = violation_common.df_to_model_ready(data_validate, categorical_cols_to_keep, numerical_cols_to_keep, target, preprocessor=preprocessor)
 
     model = RangerForestRegressor(**param)
 
@@ -97,8 +110,13 @@ def ridge_objective(trial, data_train, data_validate, metrics, objective_metric,
         "solver": trial.suggest_categorical("solver", ['auto', 'svd', 'cholesky', 'lsqr', 'sparse_cg', 'sag', 'saga'])
     }
 
-    X_train, y_train, preprocessor, target_transformer = violation_common.encode_and_scale(data_train, target=target, contionous_target=True, to_keep=feature_ranking[0:num_features], categorical_cols=categorical_cols, numerical_cols=numerical_cols, preprocessor=None, target_transformer=None)
-    X_validate, y_validate, _, _ = violation_common.encode_and_scale(data_validate, target=target, to_keep=feature_ranking[0:num_features], preprocessor=preprocessor, target_transformer=target_transformer)
+    cols_to_keep = feature_ranking[:num_features]
+    categorical_cols_to_keep = list(set(cols_to_keep) & set(categorical_cols))
+    numerical_cols_to_keep = list(set(cols_to_keep) & set(numerical_cols))
+    numerical_cols_to_keep.append(target)
+
+    X_train, y_train, preprocessor = violation_common.df_to_model_ready(data_train, categorical_cols_to_keep, numerical_cols_to_keep, target)
+    X_validate, y_validate, _ = violation_common.df_to_model_ready(data_validate, categorical_cols_to_keep, numerical_cols_to_keep, target, preprocessor=preprocessor)
 
     model = Ridge(**param)
 
@@ -130,8 +148,13 @@ def nn_regression_objective(trial, data_train, data_validate, metrics, objective
 
     num_features = trial.suggest_int('num_features', 1, len(categorical_cols) + len(numerical_cols))
 
-    X_train, y_train, preprocessor, target_transformer = violation_common.encode_and_scale(data_train, target=target, contionous_target=True, to_keep=feature_ranking[0:num_features], categorical_cols=categorical_cols, numerical_cols=numerical_cols, preprocessor=None, target_transformer=None)
-    X_validate, y_validate, _, _ = violation_common.encode_and_scale(data_validate, target=target, to_keep=feature_ranking[0:num_features], preprocessor=preprocessor, target_transformer=target_transformer)
+    cols_to_keep = feature_ranking[:num_features]
+    categorical_cols_to_keep = list(set(cols_to_keep) & set(categorical_cols))
+    numerical_cols_to_keep = list(set(cols_to_keep) & set(numerical_cols))
+    numerical_cols_to_keep.append(target)
+
+    X_train, y_train, preprocessor = violation_common.df_to_model_ready(data_train, categorical_cols_to_keep, numerical_cols_to_keep, target)
+    X_validate, y_validate, _ = violation_common.df_to_model_ready(data_validate, categorical_cols_to_keep, numerical_cols_to_keep, target, preprocessor=preprocessor)
 
     input_size = X_train.shape[1]
     dropout_rate = trial.suggest_float('dropout_rate', 0.1, 0.5)
@@ -228,7 +251,7 @@ def rmse(y_true, y_pred):
     return np.sqrt(mean_squared_error(y_true, y_pred))
 
 
-def hp_tune(train_hp, validate_hp, scaler):
+def hp_tune(train_hp, validate_hp):
 
     categorical_cols = ['PRIMARY_OR_MILL', 'COAL_METAL_IND', 'MINE_TYPE', 'VIOLATOR_TYPE_CD']
     numerical_cols = ['VIOLATOR_INSPECTION_DAY_CNT', 'VIOLATOR_VIOLATION_CNT', 'YEAR_OCCUR']
@@ -247,9 +270,9 @@ def hp_tune(train_hp, validate_hp, scaler):
 
     # model types is a list of tuples of model names and objective functions and number of trials
     model_types = [('lightgbm', lgb_regression_objective, 20),
-                   ('random_forest', rf_regression_objective, 20),
-                   ('ridge_regression', ridge_objective, 50),
-                   ('neural_network', nn_regression_objective, 10)]
+                   ('random_forest', rf_regression_objective, 10),
+                   ('ridge_regression', ridge_objective, 10),
+                   ('neural_network', nn_regression_objective, 5)]
 
     # list of tuples of metric names and functions
     # [('metric_name', metric_function), ...]
@@ -313,11 +336,30 @@ def hp_tune(train_hp, validate_hp, scaler):
         print(hp_validation_results)
 
 if __name__ == '__main__':
-    train_full = pd.read_csv('data/after_2010_train_full.csv', index_col=0)
-    test = pd.read_csv('data/after_2010_test.csv', index_col=0)
+    # train_full = pd.read_csv('data/after_2010_train_full.csv', index_col=0)
+    # test = pd.read_csv('data/after_2010_test.csv', index_col=0)
     train_hp = pd.read_csv('data/after_2010_train_hp.csv', index_col=0)
     validate_hp = pd.read_csv('data/after_2010_validate_hp.csv', index_col=0)
-    train_smote_full = pd.read_csv('data/after_2010_train_smote_full.csv', index_col=0)
-    train_hp_smote = pd.read_csv('data/after_2010_train_smote_hp.csv', index_col=0)
+    # train_smote_full = pd.read_csv('data/after_2010_train_smote_full.csv', index_col=0)
+    # train_hp_smote = pd.read_csv('data/after_2010_train_smote_hp.csv', index_col=0)
 
-    hp_tune(train_hp, validate_hp)
+    model_types = [('lightgbm', lgb_regression_objective, 20),
+                   ('random_forest', rf_regression_objective, 10),
+                   ('ridge_regression', ridge_objective, 10),
+                   ('neural_network', nn_regression_objective, 5)]
+
+    with open('data/hp_validation_results_regressors.pkl', 'rb') as f:
+        hp_validation_results = pickle.load(f)
+        # print(hp_validation_results)
+
+
+    for model_name, objective, _ in model_types:
+        for sig_sub in ['Y', 'N']:
+            print(f'Model: {model_name}, SIG_SUB: {sig_sub}')
+            # print("Best hyperparameters:")
+            # pprint(hp_validation_results[model_name][sig_sub].best_params)
+            print("Metrics:")
+            pprint(hp_validation_results[model_name][sig_sub].best_trial.user_attrs)
+            print()
+
+    # hp_tune(train_hp, validate_hp)

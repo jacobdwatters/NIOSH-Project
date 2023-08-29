@@ -9,7 +9,7 @@ from sklearn.preprocessing import StandardScaler
 
 from SIG_SUB_Classifier import lgb_objective as classifier_objective
 from SIG_SUB_Regression_Models import lgb_regression_objective as regression_y_objective
-from SIG_SUB_Regression_Models import rf_regression_objective as regression_n_objective
+from SIG_SUB_Regression_Models import lgb_regression_objective as regression_n_objective
 
 import violation_common
 
@@ -38,14 +38,16 @@ feature_ranking = [
 
 def predict_two_stage(classifier_trial, regression_y_trial, regression_n_trial, data_train, data_validate, metrics, perfect_classifier=False):
 
-    data_train, scaler = violation_common.scale_selected_columns(data_train, cols_to_scale=numerical_cols + [target_regression])
-    data_validate, _ = violation_common.scale_selected_columns(data_validate, cols_to_scale=numerical_cols + [target_regression], preprocessor=scaler)
+    # TODO make sure each regression model gets its data transformed properly during testing
+
+    # data_train, scaler = violation_common.scale_selected_columns(data_train, cols_to_scale=numerical_cols + [target_regression])
+    # data_validate, _ = violation_common.scale_selected_columns(data_validate, cols_to_scale=numerical_cols + [target_regression], preprocessor=scaler)
 
     classifier_preds = classifier_objective(classifier_trial, data_train, data_validate, metrics=None, objective_metric=None, just_predict=True)
     if perfect_classifier:
         classifier_preds = data_validate['SIG_SUB'].values == 'Y'
-    regression_y_preds = regression_y_objective(regression_y_trial, data_train[data_train['SIG_SUB'] == 'Y'], data_validate, metrics=None, objective_metric=None, just_predict=True, target='PROPOSED_PENALTY', categorical_cols=categorical_cols, numerical_cols=numerical_cols, feature_ranking=feature_ranking)
-    regression_n_preds = regression_n_objective(regression_n_trial, data_train[data_train['SIG_SUB'] == 'N'], data_validate, metrics=None, objective_metric=None, just_predict=True, target='PROPOSED_PENALTY', categorical_cols=categorical_cols, numerical_cols=numerical_cols, feature_ranking=feature_ranking)
+    regression_y_preds, yes_preprocessor = regression_y_objective(regression_y_trial, data_train[data_train['SIG_SUB'] == 'Y'], data_validate, metrics=None, objective_metric=None, just_predict=True, target='PROPOSED_PENALTY', categorical_cols=categorical_cols, numerical_cols=numerical_cols, feature_ranking=feature_ranking)
+    regression_n_preds, no_preprocessor = regression_n_objective(regression_n_trial, data_train[data_train['SIG_SUB'] == 'N'], data_validate, metrics=None, objective_metric=None, just_predict=True, target='PROPOSED_PENALTY', categorical_cols=categorical_cols, numerical_cols=numerical_cols, feature_ranking=feature_ranking)
     
     combined_preds = np.zeros_like(classifier_preds) * np.nan
 
@@ -54,8 +56,16 @@ def predict_two_stage(classifier_trial, regression_y_trial, regression_n_trial, 
 
     combined_preds[regression_y_indices] = regression_y_preds[regression_y_indices]
     combined_preds[regression_n_indices] = regression_n_preds[regression_n_indices]
+
+    # scale data correctly for each regression model
+    # data scaled for Y
+    _, y_validate_yes, _ = violation_common.df_to_model_ready(data_validate, categorical_cols, numerical_cols, target_regression, preprocessor=yes_preprocessor)
+    # data scaled for N
+    _, y_validate_no, _ = violation_common.df_to_model_ready(data_validate, categorical_cols, numerical_cols, target_regression, preprocessor=no_preprocessor)
     
     true_y = data_validate['PROPOSED_PENALTY'].values
+    true_y[regression_n_indices] = y_validate_no[regression_n_indices]
+    true_y[regression_y_indices] = y_validate_yes[regression_y_indices]
 
     metric_results = dict()
 
@@ -81,7 +91,7 @@ if __name__ == '__main__':
     with open('data/hp_validation_results_regressors.pkl', 'rb') as f:
         hp_validation_results = pickle.load(f)
         best_regression_y_trial = hp_validation_results['lightgbm']['Y'].best_trial
-        best_regression_n_trial = hp_validation_results['random_forest']['N'].best_trial
+        best_regression_n_trial = hp_validation_results['lightgbm']['N'].best_trial
 
     train_full = pd.read_csv('data/after_2010_train_full.csv', index_col=0)
     test = pd.read_csv('data/after_2010_test.csv', index_col=0)
@@ -98,5 +108,5 @@ if __name__ == '__main__':
                ('rmse', rmse),
                ('explained_variance_score', explained_variance_score)]
 
-    metrics = predict_two_stage(best_classifier_trial, best_regression_y_trial, best_regression_n_trial, train_full, test, metrics=metrics, perfect_classifier=False)
+    metrics = predict_two_stage(best_classifier_trial, best_regression_y_trial, best_regression_n_trial, train_hp, validate_hp, metrics=metrics, perfect_classifier=True)
     pprint(metrics)
