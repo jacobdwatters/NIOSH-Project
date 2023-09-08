@@ -13,7 +13,7 @@ from pprint import pprint
 import optuna
 
 
-categorical_cols = ['PRIMARY_OR_MILL', 'COAL_METAL_IND', 'MINE_TYPE', 'VIOLATOR_TYPE_CD', 'SIG_SUB']
+categorical_cols = ['PRIMARY_OR_MILL', 'COAL_METAL_IND', 'MINE_TYPE', 'VIOLATOR_TYPE_CD']
 numerical_cols = ['VIOLATOR_INSPECTION_DAY_CNT', 'VIOLATOR_VIOLATION_CNT', 'YEAR_OCCUR']
 
 target = 'PROPOSED_PENALTY'
@@ -22,7 +22,6 @@ feature_ranking = [
     'YEAR_OCCUR',
     'VIOLATOR_VIOLATION_CNT',
     'VIOLATOR_INSPECTION_DAY_CNT',
-    'SIG_SUB',
     'MINE_TYPE',
     'PRIMARY_OR_MILL',
     'COAL_METAL_IND',
@@ -137,12 +136,12 @@ if __name__ == '__main__':
     with open('data/hp_validation_results_one_stage.pkl', 'rb') as f:
         hp_validation_results = pickle.load(f)
     #     # print(hp_validation_results)
-    #     for model_name, _, _ in model_types:
-    #         print(f'{model_name}:')
+        for model_name, _, _ in model_types:
+            print(f'{model_name}:')
     #         # print("Best hyperparameters:")
     #         # pprint(hp_validation_results[model_name].best_params)
-    #         print("Metrics:")
-    #         pprint(hp_validation_results[model_name].best_trial.user_attrs)
+            print("Metrics:")
+            pprint(hp_validation_results[model_name].best_trial.user_attrs)
 
         best_regression_trial = hp_validation_results['lightgbm'].best_trial
     
