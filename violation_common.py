@@ -24,6 +24,73 @@ def retreive_raw_violation_data():
 
     return violation_data
 
+def retreive_raw_violation_data_contest():
+    features = [
+        # Temporal Features
+        # "INSPECTION_BEGIN_DT", "INSPECTION_END_DT",
+        # "VIOLATION_ISSUE_DT", "VIOLATION_OCCUR_DT",
+        # "CAL_YR", "CAL_QTR", "FISCAL_YR", "FISCAL_QTR",
+        # "ORIG_TERM_DUE_DT", "LATEST_TERM_DUE_DT",
+        "VIOLATION_OCCUR_DT",
+    
+        # Violation Specifics
+        "SIG_SUB",
+        "SECTION_OF_ACT", #"PART_SECTION",
+        "LIKELIHOOD", "INJ_ILLNESS",
+        "NO_AFFECTED",
+        "NEGLIGENCE",
+    
+        # Financial Features
+        "PROPOSED_PENALTY", "AMOUNT_DUE",
+    
+        # Other Features
+        "ENFORCEMENT_AREA",
+        "SPECIAL_ASSESS",
+        "VIOLATOR_VIOLATION_CNT", "VIOLATOR_INSPECTION_DAY_CNT",
+        "LAST_ACTION_CD", "DOCKET_STATUS_CD",
+        "MINE_TYPE", "COAL_METAL_IND", "PRIMARY_OR_MILL"
+    ]
+
+    targets = ['CONTESTED_IND']
+
+    violation_data = pd.read_csv("https://arlweb.msha.gov/OpenGovernmentData/DataSets/Violations.zip", 
+                                 encoding='latin-1', compression='zip', sep='|', 
+                                 usecols = [*features, *targets])
+    
+    return violation_data
+
+def process_raw_contest_data(violation_data):
+    # Impute missing categorical values
+    violation_data['MINE_TYPE'].fillna('Facility', inplace=True)
+    violation_data['COAL_METAL_IND'].fillna('M', inplace=True)
+    violation_data['PRIMARY_OR_MILL'].fillna('Not_Applicable', inplace=True)
+    violation_data['SECTION_OF_ACT'].fillna('NoSection', inplace=True)
+    violation_data['ENFORCEMENT_AREA'].fillna('Unknown', inplace=True)
+    # violation_data['LAST_ACTION_CD'].fillna('Unknown', inplace=True)
+    # violation_data['DOCKET_STATUS_CD'].fillna('Unknown', inplace=True)
+
+    # Impute missing numerical values
+    violation_data['VIOLATOR_VIOLATION_CNT'].fillna(0, inplace=True)
+    violation_data['VIOLATOR_INSPECTION_DAY_CNT'].fillna(0, inplace=True)
+    violation_data['PROPOSED_PENALTY'].fillna(0, inplace=True)
+    # violation_data['AMOUNT_DUE'].fillna(0, inplace=True)
+    violation_data['NO_AFFECTED'].fillna(0, inplace=True)
+
+    # Convert datetime fields and extract temporal features
+    violation_data['VIOLATION_OCCUR_DT'] = pd.to_datetime(violation_data['VIOLATION_OCCUR_DT'], format='%m/%d/%Y', exact=False)
+    violation_data.reset_index(inplace=True)
+    violation_data['YEAR_OCCUR'] = violation_data['VIOLATION_OCCUR_DT'].dt.year
+
+
+
+    # Drop unnecessary columns
+    violation_data = violation_data.drop(columns=['VIOLATION_OCCUR_DT'])
+    violation_data = violation_data.drop(columns=['index'])
+
+    return violation_data.dropna()
+
+
+
 def process_raw_violation_data(violation_data):
     violation_data['MINE_TYPE'].fillna('Facility', inplace=True)
     violation_data['COAL_METAL_IND'].fillna('M', inplace=True)

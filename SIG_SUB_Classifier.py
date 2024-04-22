@@ -17,6 +17,7 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 
 import pickle
+import dill
 
 from tqdm import tqdm
 
@@ -40,7 +41,7 @@ feature_ranking = [
 ]
 
 
-def lgb_objective(trial, data_train, data_validate, metrics, objective_metric, just_predict=False):
+def lgb_objective(trial, data_train, data_validate, metrics, objective_metric, just_predict=False, return_model=False):
 
     param = {
         "objective": "binary",
@@ -73,6 +74,9 @@ def lgb_objective(trial, data_train, data_validate, metrics, objective_metric, j
 
     if just_predict:
         return pred_labels
+    
+    if return_model:
+        return model
 
     # calculate metrics
     for metric_name, metric_func, requires_proba in metrics:
@@ -86,7 +90,7 @@ def lgb_objective(trial, data_train, data_validate, metrics, objective_metric, j
     return trial.user_attrs[objective_metric]
 
 
-def rf_objective(trial, data_train, data_validate, metrics, objective_metric):
+def rf_objective(trial, data_train, data_validate, metrics, objective_metric, just_predict=False, return_model=False):
     num_features = trial.suggest_int('num_features', 1, len(categorical_cols) + len(numerical_cols))
     param = {
         "n_estimators": trial.suggest_int("n_estimators", 64, 128),
@@ -110,6 +114,11 @@ def rf_objective(trial, data_train, data_validate, metrics, objective_metric):
     preds = model.predict_proba(X_validate)[:, 1]
     pred_labels = model.predict(X_validate)
 
+    if just_predict:
+        return pred_labels
+    if return_model:
+        return model
+
     # calculate metrics
     for metric_name, metric_func, requires_proba in metrics:
         metric_value = None
@@ -122,7 +131,7 @@ def rf_objective(trial, data_train, data_validate, metrics, objective_metric):
     return trial.user_attrs[objective_metric]
 
 
-def logistic_objective(trial, data_train, data_validate, metrics, objective_metric):
+def logistic_objective(trial, data_train, data_validate, metrics, objective_metric, just_predict=False, return_model=False):
     num_features = trial.suggest_int('num_features', 1, len(categorical_cols) + len(numerical_cols))
     param = {
         "C": trial.suggest_float("C", 1e-10, 1e10, log=True),
@@ -144,6 +153,11 @@ def logistic_objective(trial, data_train, data_validate, metrics, objective_metr
     model.fit(X_train, y_train)
     preds = model.predict_proba(X_validate)[:, 1]
     pred_labels = model.predict(X_validate)
+
+    if just_predict:
+        return pred_labels
+    if return_model:
+        return model
 
     # calculate metrics
     for metric_name, metric_func, requires_proba in metrics:
@@ -169,7 +183,7 @@ class ClassifierDataset(Dataset):
         return torch.tensor(self.features[idx], dtype=torch.float), torch.unsqueeze(torch.tensor(self.labels[idx], dtype=torch.float), dim=0)
 
 
-def nn_objective(trial, data_train, data_validate, metrics, objective_metric):
+def nn_objective(trial, data_train, data_validate, metrics, objective_metric, just_predict=False, return_model=False):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     # Define neural network architecture
@@ -256,6 +270,10 @@ def nn_objective(trial, data_train, data_validate, metrics, objective_metric):
             if early_stopping_strikes == 2:
                 break
 
+    if return_model:
+        return model
+
+
     # Validation
     model.eval()
     preds = []
@@ -269,6 +287,9 @@ def nn_objective(trial, data_train, data_validate, metrics, objective_metric):
             targets.extend(labels.cpu().numpy())
 
     pred_labels = np.array(preds) > 0.5
+
+    if just_predict:
+        return pred_labels
         
     # calculate metrics
     for metric_name, metric_func, requires_proba in metrics:
@@ -282,7 +303,7 @@ def nn_objective(trial, data_train, data_validate, metrics, objective_metric):
     return trial.user_attrs[objective_metric]
 
 
-def hp_tune(train_hp, validate_hp, train_hp_smote):
+def hp_tune(train_hp, validate_hp, train_hp_smote, only_save_model=False):
     dataset_types = ['non_smote', 'smote']
 
     # model types is a list of tuples of model names and objective functions and number of trials
@@ -337,13 +358,28 @@ def hp_tune(train_hp, validate_hp, train_hp_smote):
             pprint(hp_validation_results[dataset_type][model_name].best_trial.user_attrs)
             print()
 
-    # Save results with pickle
-    with open('data/hp_validation_results_classifiers.pkl', 'wb') as f:
-        pickle.dump(hp_validation_results, f)
+    if not only_save_model:
+        # Save results with pickle
+        with open('data/hp_validation_results_classifiers.pkl', 'wb') as f:
+            pickle.dump(hp_validation_results, f)
 
-    with open('data/hp_validation_results_classifiers.pkl', 'rb') as f:
-        hp_validation_results = pickle.load(f)
-        print(hp_validation_results)
+        with open('data/hp_validation_results_classifiers.pkl', 'rb') as f:
+            hp_validation_results = pickle.load(f)
+            print(hp_validation_results)
+
+    # save best models
+    for dataset_type in dataset_types:
+        for model_name, objective, _ in model_types:
+            print(f'SMOTE: {dataset_type}, Model: {model_name}')
+            best_trial = hp_validation_results[dataset_type][model_name].best_trial
+            best_params = best_trial.params
+            best_model = objective(best_trial, train_hp, validate_hp, metrics, 'roc_auc_score', return_model=True)
+            # save with pickle and dill just in case
+            with open(f'data/best_models/{model_name}_{dataset_type}.pkl', 'wb') as f, open(f'data/best_models/{model_name}_{dataset_type}.dill', 'wb') as f2:
+                pickle.dump(best_model, f)
+                dill.dump(best_model, f2)
+
+            # now save with 
 
 
 if __name__ == '__main__':
@@ -361,16 +397,16 @@ if __name__ == '__main__':
                    ('random_forest', rf_objective, 10),
                    ('logistic_regression', logistic_objective, 10),
                    ('neural_network', nn_objective, 5)]
-    with open('data/hp_validation_results_classifiers.pkl', 'rb') as f:
-        hp_validation_results = pickle.load(f)
-        for dataset_type in dataset_types:
-            for model_name, objective, _ in model_types:
-                print(f'SMOTE: {dataset_type}, Model: {model_name}')
-                # print("Best hyperparameters:")
-                # pprint(hp_validation_results[dataset_type][model_name].best_params)
-                # print("Metrics:")
-                # pprint(hp_validation_results[dataset_type][model_name].best_trial.user_attrs)
-                print('Confusion Matrix:')
-                pprint(hp_validation_results[dataset_type][model_name].best_trial.user_attrs['confusion_matrix'])
-                print()
-    # hp_tune(train_hp, validate_hp, train_hp_smote)
+    # with open('data/hp_validation_results_classifiers.pkl', 'rb') as f:
+    #     hp_validation_results = pickle.load(f)
+    #     for dataset_type in dataset_types:
+    #         for model_name, objective, _ in model_types:
+    #             print(f'SMOTE: {dataset_type}, Model: {model_name}')
+    #             print("Best hyperparameters:")
+    #             pprint(hp_validation_results[dataset_type][model_name].best_params)
+    #             print("Metrics:")
+    #             pprint(hp_validation_results[dataset_type][model_name].best_trial.user_attrs)
+    #             print('Confusion Matrix:')
+    #             pprint(hp_validation_results[dataset_type][model_name].best_trial.user_attrs['confusion_matrix'])
+    #             print()
+    hp_tune(train_hp, validate_hp, train_hp_smote, only_save_model=True)

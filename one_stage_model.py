@@ -36,9 +36,10 @@ def hp_tune(train_hp, validate_hp):
 
     # model types is a list of tuples of model names and objective functions and number of trials
     model_types = [('lightgbm', lgb_regression_objective, 20),
-                   ('random_forest', rf_regression_objective, 10),
-                   ('ridge_regression', ridge_objective, 10),
-                   ('neural_network', nn_regression_objective, 5)]
+                   #('random_forest', rf_regression_objective, 10),
+                   #('ridge_regression', ridge_objective, 10),
+                   #('neural_network', nn_regression_objective, 5)
+                   ]
 
     # list of tuples of metric names and functions
     # [('metric_name', metric_function), ...]
@@ -128,9 +129,10 @@ if __name__ == '__main__':
                ('explained_variance_score', explained_variance_score)]
     
     model_types = [('lightgbm', lgb_regression_objective, 20),
-                   ('random_forest', rf_regression_objective, 10),
-                   ('ridge_regression', ridge_objective, 10),
-                   ('neural_network', nn_regression_objective, 5)]
+                #    ('random_forest', rf_regression_objective, 10),
+                #    ('ridge_regression', ridge_objective, 10),
+                #    ('neural_network', nn_regression_objective, 5)
+                ]
 
     best_regression_trial = None
     with open('data/hp_validation_results_one_stage.pkl', 'rb') as f:
@@ -138,8 +140,8 @@ if __name__ == '__main__':
     #     # print(hp_validation_results)
         for model_name, _, _ in model_types:
             print(f'{model_name}:')
-    #         # print("Best hyperparameters:")
-    #         # pprint(hp_validation_results[model_name].best_params)
+            print("Best hyperparameters:")
+            pprint(hp_validation_results[model_name].best_params)
             print("Metrics:")
             pprint(hp_validation_results[model_name].best_trial.user_attrs)
 

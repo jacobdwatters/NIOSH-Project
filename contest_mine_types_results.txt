@@ -1,0 +1,26 @@
+Loading data...
+Data loaded.
+Processing data...
+Using device: cuda
+Data processed.
+Final Train Accuracy: 98.22%
+Final Test Accuracy: 98.15%
+Test Metrics: Balanced Accuracy: 0.7008, Precision: 0.6930, Recall: 0.4060, F1: 0.5120
+
+Mine Type: Surface
+Processing data...
+Final Train Accuracy: 98.80%
+Final Test Accuracy: 98.70%
+Test Metrics: Balanced Accuracy: 0.6464, Precision: 0.7526, Recall: 0.2943, F1: 0.4232
+
+Mine Type: Underground
+Processing data...
+Final Train Accuracy: 97.91%
+Final Test Accuracy: 97.80%
+Test Metrics: Balanced Accuracy: 0.7546, Precision: 0.7055, Recall: 0.5163, F1: 0.5962
+
+Mine Type: Facility
+Processing data...
+Final Train Accuracy: 98.77%
+Final Test Accuracy: 98.46%
+Test Metrics: Balanced Accuracy: 0.7806, Precision: 0.8320, Recall: 0.5646, F1: 0.6727
